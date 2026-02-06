@@ -9,9 +9,14 @@ import { chromium } from "playwright-core";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize Gemini
+// Initialize Gemini - use GOOGLE_API_KEY for production, fallback to Replit integration key
+const apiKey = process.env.GOOGLE_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+if (!apiKey) {
+  console.warn("Warning: No Gemini API key found. AI analysis will not work.");
+}
+
 const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "dummy",
+  apiKey: apiKey || "dummy",
   httpOptions: {
     apiVersion: "",
     baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
