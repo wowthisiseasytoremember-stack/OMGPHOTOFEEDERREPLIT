@@ -76,22 +76,49 @@ export async function registerRoutes(
       const base64Image = req.file.buffer.toString("base64");
       const prompt = `Analyze this item for a reseller. Return JSON with these fields: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords). Be concise.`;
 
-      // Use gemini-2.0-flash-exp model (available in current API)
-      const result = await genAI.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: req.file.mimetype, data: base64Image } }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
+      // Model fallback cascade - try models in order until one works
+      const modelsToTry = [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp", 
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-pro-vision",
+        "gemini-pro"
+      ];
+
+      let result = null;
+      let lastError = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          console.log(`Trying model: ${modelName}`);
+          result = await genAI.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: prompt },
+                  { inlineData: { mimeType: req.file.mimetype, data: base64Image } }
+                ]
+              }
+            ],
+            config: {
+              responseMimeType: "application/json",
+            }
+          });
+          console.log(`Success with model: ${modelName}`);
+          break; // Success!
+        } catch (err: any) {
+          console.log(`Model ${modelName} failed: ${err.message}`);
+          lastError = err;
+          // Continue to next model
         }
-      });
+      }
+
+      if (!result) {
+        throw lastError || new Error("All models failed");
+      }
 
       const responseText = result.text;
       if (!responseText) throw new Error("No response from AI");
