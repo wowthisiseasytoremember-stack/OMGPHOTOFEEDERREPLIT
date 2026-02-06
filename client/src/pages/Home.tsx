@@ -395,25 +395,7 @@ export default function Home() {
                               </Button>
                             </div>
 
-                            {/* Type & Condition Row */}
-                            <div className="flex gap-1.5 flex-wrap">
-                              {(item.ambientData as any)?.type && (
-                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-blue-500/20 text-blue-400 border-blue-500/30">
-                                  {(item.ambientData as any).type}
-                                </Badge>
-                              )}
-                              {(item.ambientData as any)?.condition && (
-                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                                  {(item.ambientData as any).condition}
-                                </Badge>
-                              )}
-                              {(item.ambientData as any)?.rarity && (item.ambientData as any).rarity !== "Unknown" && (
-                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-purple-500/20 text-purple-400 border-purple-500/30">
-                                  {(item.ambientData as any).rarity}
-                                </Badge>
-                              )}
-                            </div>
-                            
+                             {/* Identification fields */}
                             <div className="grid grid-cols-2 gap-1.5 text-xs">
                               <div>
                                 <span className="text-[9px] uppercase font-medium text-muted-foreground">Brand</span>
