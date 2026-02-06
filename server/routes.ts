@@ -159,10 +159,10 @@ Be thorough but concise. If a field is not determinable, use null.`;
       // Normalize AI response to our schema expectations
       const normalized = {
         name: data.name || "Unknown Item",
-        brand: data.brand,
-        edition: data.edition,
-        year: data.year,
-        identifiers: typeof data.identifiers === 'object' ? JSON.stringify(data.identifiers) : data.identifiers,
+        brand: data.brand ? String(data.brand) : null,
+        edition: data.edition ? String(data.edition) : null,
+        year: data.year ? String(data.year) : null,
+        identifiers: typeof data.identifiers === 'object' ? JSON.stringify(data.identifiers) : (data.identifiers ? String(data.identifiers) : null),
         vibes: Array.isArray(data.vibes) ? data.vibes : [],
         ambientData: {
           ...data,
