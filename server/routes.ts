@@ -4,24 +4,18 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import multer from "multer";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 // Playwright removed - too heavy for serverless, causes startup timeouts
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize Gemini - use GOOGLE_API_KEY for production, fallback to Replit integration key
+// Initialize Gemini - use GOOGLE_API_KEY for production
 const apiKey = process.env.GOOGLE_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
 if (!apiKey) {
   console.warn("Warning: No Gemini API key found. AI analysis will not work.");
 }
 
-const ai = new GoogleGenAI({
-  apiKey: apiKey || "dummy",
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
-});
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 export async function registerRoutes(
   httpServer: Server,
@@ -71,32 +65,40 @@ export async function registerRoutes(
   // --- Analysis (Gemini) ---
   app.post(api.analyze.upload.path, upload.single("image"), async (req, res) => {
     try {
+      if (!genAI) {
+        return res.status(500).json({ message: "AI not configured - missing API key" });
+      }
+      
       if (!req.file) return res.status(400).json({ message: "No image provided" });
 
       const base64Image = req.file.buffer.toString("base64");
-      const prompt = `Analyze this for a reseller. Return JSON: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords).`;
+      const prompt = `Analyze this item for a reseller. Return JSON with these fields: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords). Be concise.`;
 
-      const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: req.file.mimetype, data: base64Image } }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
-        }
-      });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      const result = await model.generateContent([
+        { text: prompt },
+        { inlineData: { mimeType: req.file.mimetype, data: base64Image } }
+      ]);
 
-      const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const responseText = result.response.text();
       if (!responseText) throw new Error("No response from AI");
 
-      const data = JSON.parse(responseText);
-      
+      // Try to extract JSON from the response
+      let data;
+      try {
+        // Try direct parse first
+        data = JSON.parse(responseText);
+      } catch {
+        // Try to extract JSON from markdown code blocks
+        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          data = JSON.parse(jsonMatch[1].trim());
+        } else {
+          throw new Error("Could not parse AI response as JSON");
+        }
+      }
+
       // Normalize AI response to our schema expectations
       // AI might return "identifiers": "ISBN 123" or object. 
       // We want flat strings for the main fields if possible.
