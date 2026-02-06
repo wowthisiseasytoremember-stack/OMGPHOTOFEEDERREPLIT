@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: photo-feeder
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: photo-feeder-db
+          property: connectionString
+      - key: GOOGLE_API_KEY
+        sync: false
+
+databases:
+  - name: photo-feeder-db
+    plan: free
+    databaseName: photofeeder
+    user: photofeeder
