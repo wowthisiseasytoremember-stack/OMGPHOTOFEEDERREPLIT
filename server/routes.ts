@@ -76,9 +76,9 @@ export async function registerRoutes(
       const base64Image = req.file.buffer.toString("base64");
       const prompt = `Analyze this item for a reseller. Return JSON with these fields: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords). Be concise.`;
 
-      // Use gemini-1.5-flash model
+      // Use gemini-2.0-flash-exp model (available in current API)
       const result = await genAI.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash-exp",
         contents: [
           {
             role: "user",
