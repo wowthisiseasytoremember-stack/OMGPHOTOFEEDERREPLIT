@@ -4,36 +4,43 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-let pool: pg.Pool | null = null;
-let drizzleDb: ReturnType<typeof drizzle> | null = null;
+// Lazy initialization - only create pool when first used
+let _pool: pg.Pool | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
-function getPool() {
-  if (!pool) {
+function getPool(): pg.Pool {
+  if (!_pool) {
     if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL must be set");
+      throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
     }
-    pool = new Pool({ 
+    _pool = new Pool({ 
       connectionString: process.env.DATABASE_URL,
       connectionTimeoutMillis: 5000,
     });
   }
-  return pool;
+  return _pool;
 }
 
-export { getPool as pool };
-
-export function getDb() {
-  if (!drizzleDb) {
-    drizzleDb = drizzle(getPool(), { schema });
+function getDb() {
+  if (!_db) {
+    _db = drizzle(getPool(), { schema });
   }
-  return drizzleDb;
+  return _db;
 }
 
-// For backwards compatibility
-export const db = {
-  get select() { return getDb().select.bind(getDb()); },
-  get insert() { return getDb().insert.bind(getDb()); },
-  get update() { return getDb().update.bind(getDb()); },
-  get delete() { return getDb().delete.bind(getDb()); },
-  get query() { return getDb().query; },
-};
+// Export a proxy that lazily initializes the db
+export const pool = new Proxy({} as pg.Pool, {
+  get: (_target, prop) => {
+    const p = getPool();
+    const value = (p as any)[prop];
+    return typeof value === 'function' ? value.bind(p) : value;
+  }
+});
+
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get: (_target, prop) => {
+    const d = getDb();
+    const value = (d as any)[prop];
+    return typeof value === 'function' ? value.bind(d) : value;
+  }
+});
