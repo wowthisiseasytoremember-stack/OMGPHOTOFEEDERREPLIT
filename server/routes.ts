@@ -5,7 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
-import { chromium } from "playwright-core";
+// Playwright removed - too heavy for serverless, causes startup timeouts
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -117,68 +117,11 @@ export async function registerRoutes(
     }
   });
 
-  // --- Browser Pilot (Playwright) ---
+  // --- Browser Pilot (Disabled - Playwright too heavy for serverless) ---
   app.post(api.browserPilot.connect.path, async (req, res) => {
-    try {
-      const { wsEndpoint } = req.body;
-      
-      // Connect to the browser
-      const browser = await chromium.connectOverCDP(wsEndpoint);
-      const contexts = browser.contexts();
-      const page = contexts[0]?.pages()[0]; // Grab first page of first context
-
-      if (!page) {
-        await browser.close();
-        return res.status(400).json({ message: "No open pages found in browser" });
-      }
-
-      // Take screenshot
-      const buffer = await page.screenshot();
-      await browser.close();
-
-      const base64Image = buffer.toString("base64");
-      const prompt = `Analyze this webpage screenshot for a reseller. Identify the main item being shown. Return JSON: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords).`;
-
-      // Analyze with Gemini
-      const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: "image/png", data: base64Image } }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
-        }
-      });
-
-      const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!responseText) throw new Error("No response from AI");
-      const data = JSON.parse(responseText);
-
-      // Create item immediately (Pilot flow)
-      const newItem = await storage.createItem({
-        name: data.name || "Web Capture",
-        brand: data.brand,
-        edition: data.edition,
-        year: data.year,
-        identifiers: typeof data.identifiers === 'object' ? JSON.stringify(data.identifiers) : data.identifiers,
-        vibes: Array.isArray(data.vibes) ? data.vibes : [],
-        ambientData: data,
-        status: "ACTIVE",
-        qty: 1
-      });
-
-      res.json({ message: "Captured successfully", items: [newItem] });
-
-    } catch (error: any) {
-      console.error("Browser pilot failed:", error);
-      res.status(500).json({ message: `Browser Pilot failed: ${error.message}` });
-    }
+    res.status(501).json({ 
+      message: "Browser Pilot is not available in production. Use batch upload instead." 
+    });
   });
 
   // --- Export ---
