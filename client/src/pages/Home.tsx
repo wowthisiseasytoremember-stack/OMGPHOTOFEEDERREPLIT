@@ -20,6 +20,40 @@ import { apiRequest } from "@/lib/queryClient";
 type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "status";
 type ViewMode = "grid" | "table";
 
+// Client-side image resize to create smaller thumbnails
+async function resizeImage(file: File, maxWidth: number = 400, quality: number = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    img.onload = () => {
+      // Calculate new dimensions maintaining aspect ratio
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        // Return as base64 data URL
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } else {
+        reject(new Error('Could not get canvas context'));
+      }
+    };
+    
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export default function Home() {
   const isMobile = useMobile();
   const { toast } = useToast();
@@ -94,13 +128,21 @@ export default function Home() {
     let successCount = 0;
 
     for (const file of files) {
-      const formData = new FormData();
-      formData.append("image", file);
       try {
+        // Create resized thumbnail client-side (400px max, 70% quality)
+        const thumbnail = await resizeImage(file, 400, 0.7);
+        
+        const formData = new FormData();
+        formData.append("image", file);
+        
         const res = await fetch(api.analyze.upload.path, { method: "POST", body: formData });
         if (res.ok) {
           const data = await res.json();
-          await apiRequest("POST", api.items.create.path, data);
+          // Add the resized thumbnail to the item data
+          await apiRequest("POST", api.items.create.path, {
+            ...data,
+            imageUrl: thumbnail // Use resized thumbnail instead of full image
+          });
           successCount++;
         }
       } catch (err) {
@@ -335,37 +377,56 @@ export default function Home() {
                         </div>
                         
                         {/* Content Section */}
-                        <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
-                          <div className="space-y-2">
+                        <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+                          <div className="space-y-1">
                             <div className="flex justify-between items-start gap-2">
                               <Input
-                                className="h-7 px-0 text-base font-semibold bg-transparent border-none focus-visible:ring-0 truncate hover:bg-muted/50 rounded transition-colors"
+                                className="h-6 px-0 text-sm font-semibold bg-transparent border-none focus-visible:ring-0 truncate hover:bg-muted/50 rounded transition-colors"
                                 defaultValue={item.name}
                                 onBlur={(e) => updateMutation.mutate({ id: item.id, updates: { name: e.target.value } })}
                               />
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                 onClick={() => deleteMutation.mutate(item.id)}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
+
+                            {/* Type & Condition Row */}
+                            <div className="flex gap-1.5 flex-wrap">
+                              {(item.ambientData as any)?.type && (
+                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-blue-500/20 text-blue-400 border-blue-500/30">
+                                  {(item.ambientData as any).type}
+                                </Badge>
+                              )}
+                              {(item.ambientData as any)?.condition && (
+                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                                  {(item.ambientData as any).condition}
+                                </Badge>
+                              )}
+                              {(item.ambientData as any)?.rarity && (item.ambientData as any).rarity !== "Unknown" && (
+                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-purple-500/20 text-purple-400 border-purple-500/30">
+                                  {(item.ambientData as any).rarity}
+                                </Badge>
+                              )}
+                            </div>
                             
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div className="space-y-1">
-                                <span className="text-[10px] uppercase font-medium text-muted-foreground">Brand</span>
+                            <div className="grid grid-cols-2 gap-1.5 text-xs">
+                              <div>
+                                <span className="text-[9px] uppercase font-medium text-muted-foreground">Brand</span>
                                 <Input
-                                  className="h-6 text-xs bg-muted/50 border-none px-2 rounded"
+                                  className="h-5 text-[11px] bg-muted/50 border-none px-1.5 rounded"
                                   defaultValue={item.brand || "—"}
                                   onBlur={(e) => updateMutation.mutate({ id: item.id, updates: { brand: e.target.value } })}
                                 />
                               </div>
-                              <div className="space-y-1">
-                                <span className="text-[10px] uppercase font-medium text-muted-foreground">Year</span>
+                              <div>
+                                <span className="text-[9px] uppercase font-medium text-muted-foreground">Year</span>
                                 <Input
-                                  className="h-6 text-xs bg-muted/50 border-none px-2 rounded"
+                                  className="h-5 text-[11px] bg-muted/50 border-none px-1.5 rounded"
                                   defaultValue={item.year || "—"}
                                   onBlur={(e) => updateMutation.mutate({ id: item.id, updates: { year: e.target.value } })}
                                 />
@@ -373,15 +434,15 @@ export default function Home() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between mt-2">
-                            <div className="flex gap-1 flex-wrap overflow-hidden max-h-5">
-                              {item.vibes?.slice(0, 3).map((v, i) => (
-                                <Badge key={i} variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-muted-foreground/20">
+                          <div className="flex items-center justify-between mt-1.5">
+                            <div className="flex gap-1 flex-wrap overflow-hidden max-h-4">
+                              {item.vibes?.slice(0, 2).map((v, i) => (
+                                <Badge key={i} variant="outline" className="text-[8px] px-1 py-0 h-3.5 border-muted-foreground/20">
                                   {v}
                                 </Badge>
                               ))}
                             </div>
-                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">
                               {formatDate(item.addedAt)}
                             </span>
                           </div>
