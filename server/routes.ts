@@ -74,7 +74,26 @@ export async function registerRoutes(
       if (!req.file) return res.status(400).json({ message: "No image provided" });
 
       const base64Image = req.file.buffer.toString("base64");
-      const prompt = `Analyze this item for a reseller. Return JSON with these fields: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords). Be concise.`;
+      const mimeType = req.file.mimetype;
+      const imageDataUrl = `data:${mimeType};base64,${base64Image}`;
+      
+      const prompt = `You are an expert appraiser analyzing items for resale. Examine this image carefully and extract detailed information.
+
+Return JSON with exactly these fields:
+{
+  "name": "Full item name/title (be specific, include issue numbers, volume info)",
+  "brand": "Publisher, manufacturer, or brand name",
+  "edition": "Edition info (1st edition, limited, reprint, etc.)",
+  "year": "Year of publication/manufacture (approximate if unsure)",
+  "type": "Item category (comic book, magazine, trading card, toy, vinyl record, book, poster, etc.)",
+  "condition": "Estimated condition (Mint, Near Mint, Very Good, Good, Fair, Poor)",
+  "identifiers": "Any visible codes like ISBN, UPC, issue number, catalog number",
+  "rarity": "Estimated rarity (Common, Uncommon, Rare, Very Rare, Unknown)",
+  "vibes": ["5 descriptive keywords about this item's aesthetic, era, or appeal"],
+  "notes": "Brief description of notable features, damage, or interesting details"
+}
+
+Be thorough but concise. If a field is not determinable, use null.`;
 
       // Model fallback cascade - try models in order until one works
       const modelsToTry = [
@@ -138,8 +157,6 @@ export async function registerRoutes(
       }
 
       // Normalize AI response to our schema expectations
-      // AI might return "identifiers": "ISBN 123" or object. 
-      // We want flat strings for the main fields if possible.
       const normalized = {
         name: data.name || "Unknown Item",
         brand: data.brand,
@@ -147,7 +164,14 @@ export async function registerRoutes(
         year: data.year,
         identifiers: typeof data.identifiers === 'object' ? JSON.stringify(data.identifiers) : data.identifiers,
         vibes: Array.isArray(data.vibes) ? data.vibes : [],
-        ambientData: data // Store full raw data too
+        ambientData: {
+          ...data,
+          type: data.type,
+          condition: data.condition,
+          rarity: data.rarity,
+          notes: data.notes
+        },
+        imageUrl: imageDataUrl // Store thumbnail as base64 data URL
       };
 
       res.json(normalized);
