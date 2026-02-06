@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import multer from "multer";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 // Playwright removed - too heavy for serverless, causes startup timeouts
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -13,9 +13,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 const apiKey = process.env.GOOGLE_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
 if (!apiKey) {
   console.warn("Warning: No Gemini API key found. AI analysis will not work.");
+} else {
+  console.log("Gemini API key configured successfully");
 }
 
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const genAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export async function registerRoutes(
   httpServer: Server,
@@ -74,20 +76,29 @@ export async function registerRoutes(
       const base64Image = req.file.buffer.toString("base64");
       const prompt = `Analyze this item for a reseller. Return JSON with these fields: name, brand, edition, year, identifiers (ISBN/UPC/Issue#), vibes (5 keywords). Be concise.`;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
-      const result = await model.generateContent([
-        { text: prompt },
-        { inlineData: { mimeType: req.file.mimetype, data: base64Image } }
-      ]);
+      // Use gemini-1.5-flash model
+      const result = await genAI.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: req.file.mimetype, data: base64Image } }
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
 
-      const responseText = result.response.text();
+      const responseText = result.text;
       if (!responseText) throw new Error("No response from AI");
 
-      // Try to extract JSON from the response
+      // Parse JSON response
       let data;
       try {
-        // Try direct parse first
         data = JSON.parse(responseText);
       } catch {
         // Try to extract JSON from markdown code blocks
