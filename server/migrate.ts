@@ -1,10 +1,23 @@
-import { pool } from "./db";
+import pg from "pg";
 
 export async function runMigrations() {
-  console.log("Running database migrations...");
+  console.log("=== Starting database migrations ===");
   
+  if (!process.env.DATABASE_URL) {
+    console.error("DATABASE_URL is not set, skipping migrations");
+    return;
+  }
+
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
   try {
+    // Test connection first
+    console.log("Testing database connection...");
+    const testResult = await pool.query("SELECT NOW()");
+    console.log("Database connected:", testResult.rows[0].now);
+    
     // Create items table if it doesn't exist
+    console.log("Creating items table if not exists...");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS items (
         id SERIAL PRIMARY KEY,
@@ -22,9 +35,21 @@ export async function runMigrations() {
       )
     `);
     
-    console.log("Database migrations completed successfully!");
+    // Verify table exists
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'items'
+      )
+    `);
+    console.log("Table 'items' exists:", tableCheck.rows[0].exists);
+    
+    console.log("=== Database migrations completed successfully! ===");
   } catch (error) {
-    console.error("Migration error:", error);
-    throw error;
+    console.error("=== Migration failed ===");
+    console.error("Error:", error);
+    // Don't throw - let the app start anyway and see what happens
+  } finally {
+    await pool.end();
   }
 }
