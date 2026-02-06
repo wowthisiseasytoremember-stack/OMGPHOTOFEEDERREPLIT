@@ -164,13 +164,6 @@ Be thorough but concise. If a field is not determinable, use null.`;
         year: data.year ? String(data.year) : null,
         identifiers: typeof data.identifiers === 'object' ? JSON.stringify(data.identifiers) : (data.identifiers ? String(data.identifiers) : null),
         vibes: Array.isArray(data.vibes) ? data.vibes : [],
-        ambientData: {
-          ...data,
-          type: data.type,
-          condition: data.condition,
-          rarity: data.rarity,
-          notes: data.notes
-        },
         imageUrl: imageDataUrl // Store thumbnail as base64 data URL
       };
 
